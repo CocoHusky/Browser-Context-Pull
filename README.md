@@ -56,6 +56,10 @@ The context field is saved in the extension with `chrome.storage.local`. The tex
 4. Select the `extension/` folder.
 5. Pin the extension from the Chrome toolbar.
 
+## Privacy
+
+URL Picker runs locally in the browser. It does not send tab data, saved context text, or generated exports to any server. See [PRIVACY.md](PRIVACY.md).
+
 ## Usage
 
 1. Open the extension popup.
@@ -78,6 +82,17 @@ Build the extension ZIP:
 npm run zip
 ```
 
-The packaged extension is written to `dist/url-picker-v0.1.0.zip`. The `dist/` folder is generated locally and is not kept in the repository.
+The packaged extension is written to `dist/url-picker-v1.1.0.zip`. The `dist/` folder is generated locally and is not kept in the repository.
 
 Uses `extension/icons/icon.png` as the source icon and uses generated `16`, `48`, and `128` PNGs in the Chrome manifest.
+
+## Chrome Web Store
+
+Use [STORE_LISTING.md](STORE_LISTING.md) for listing copy, permission justifications, and privacy field language.
+
+Before uploading:
+
+1. Run `npm run check`.
+2. Run `npm run zip`.
+3. Upload `dist/url-picker-v1.1.0.zip` in the Chrome Developer Dashboard.
+4. Confirm the uploaded package shows version `1.1.0`.

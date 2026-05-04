@@ -1,6 +1,8 @@
 {
   "name": "url-picker",
-  "version": "0.1.0",
+  "version": "1.1.0",
+  "description": "Chrome extension for copying or downloading tab titles and URLs.",
+  "license": "MIT",
   "private": true,
   "scripts": {
     "zip": "bash scripts/zip-extension.sh",
