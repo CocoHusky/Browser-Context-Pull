@@ -1,9 +1,0 @@
-{
-  "name": "url-picker",
-  "version": "0.1.0",
-  "private": true,
-  "scripts": {
-    "zip": "bash scripts/zip-extension.sh",
-    "check": "node --check extension/popup.js"
-  }
-}

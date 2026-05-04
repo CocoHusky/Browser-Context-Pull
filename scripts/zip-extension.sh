@@ -9,6 +9,6 @@ mkdir -p "$DIST_DIR"
 rm -f "$ZIP_PATH"
 
 cd "$ROOT_DIR/extension"
-zip -r "$ZIP_PATH" .
+zip -r "$ZIP_PATH" . -x "*.DS_Store" "__MACOSX/*"
 
 echo "Created $ZIP_PATH"
