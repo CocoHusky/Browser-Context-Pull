@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LLM Tab Context Exporter</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main class="popup">
+      <header class="header">
+        <h1>LLM Tab Context Exporter</h1>
+        <span class="version">v0.1.0</span>
+      </header>
+
+      <section class="controls">
+        <div class="buttons-row">
+          <button id="export-current-tab">Export Current Tab</button>
+          <button id="export-current-window">Export Current Window</button>
+          <button id="export-all-windows">Export All Windows</button>
+        </div>
+        <div class="buttons-row">
+          <button id="copy-markdown">Copy Markdown</button>
+          <button id="download-markdown">Download Markdown</button>
+        </div>
+      </section>
+
+      <section class="options">
+        <label><input id="include-page-text" type="checkbox" checked /> Include page text</label>
+        <label><input id="include-meta-description" type="checkbox" checked /> Include meta description</label>
+        <label><input id="include-headings" type="checkbox" checked /> Include headings</label>
+        <label class="max-chars-label" for="max-chars">Max characters per tab</label>
+        <select id="max-chars">
+          <option value="2000">2000</option>
+          <option value="5000">5000</option>
+          <option value="12000" selected>12000</option>
+          <option value="25000">25000</option>
+          <option value="50000">50000</option>
+        </select>
+      </section>
+
+      <p id="status" class="status">Ready.</p>
+      <textarea id="markdown-output" placeholder="Generated Markdown will appear here..." spellcheck="false"></textarea>
+    </main>
+
+    <script src="popup.js"></script>
+  </body>
+</html>
