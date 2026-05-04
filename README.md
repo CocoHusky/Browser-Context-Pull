@@ -1,6 +1,6 @@
 # LLM Tab Context Exporter
 
-A local-only Chrome extension that exports open tabs into token-efficient Markdown for LLM context.
+A local-only Chrome extension that exports open tabs into Markdown for LLM context.
 
 ## Features
 
@@ -108,8 +108,6 @@ Produces:
 - [ ] Test in Brave.
 
 
-## Export modes
+### SPA pages that stay on "Loading"
 
-- **URLs only**: exports tab metadata (title, URL, domain, status) only.
-- **Raw Readable**: exports metadata plus cleaned readable text. Raw Readable preserves more page text and costs more tokens.
-- Optional advanced toggle: **Apply min/max line filters** for tighter extraction on noisy pages.
+Some sites render content late via JavaScript or in protected/cross-origin frames. v0.1.0 now waits briefly before extraction and falls back to raw `textContent` to improve capture, but some embedded/remote content may still be inaccessible to extensions.

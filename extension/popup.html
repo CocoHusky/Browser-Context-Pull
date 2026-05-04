@@ -3,26 +3,15 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Browser Context Pull</title>
+    <title>LLM Tab Context Exporter</title>
     <link rel="stylesheet" href="popup.css" />
   </head>
   <body>
     <main class="popup">
       <header class="header">
-        <div>
-          <h1>Browser Context Pull</h1>
-          <span class="version">v0.1.0</span>
-        </div>
-        <button id="help-button" class="help-button" title="Help">i</button>
+        <h1>LLM Tab Context Exporter</h1>
+        <span class="version">v0.1.0</span>
       </header>
-
-      <section id="help-panel" class="help-panel hidden">
-        <p><strong>Export scope</strong>: choose current tab/window/all windows.</p>
-        <p><strong>URLs only</strong>: includes title, URL, site, status only.</p>
-        <p><strong>Raw Readable</strong>: adds cleaned readable text (more tokens).</p>
-        <p><strong>Max chars per tab</strong>: cap per-tab body text.</p>
-        <p><strong>Max total chars</strong>: global output budget cap.</p>
-      </section>
 
       <section class="controls">
         <div class="buttons-row">
@@ -30,44 +19,24 @@
           <button id="export-current-window">Export Current Window</button>
           <button id="export-all-windows">Export All Windows</button>
         </div>
-        <div class="buttons-row two">
+        <div class="buttons-row">
           <button id="copy-markdown">Copy Markdown</button>
           <button id="download-markdown">Download Markdown</button>
         </div>
       </section>
 
       <section class="options">
-        <label for="export-mode">Export mode</label>
-        <select id="export-mode">
-          <option value="rawReadable" selected>Raw Readable</option>
-          <option value="urlsOnly">URLs only</option>
-        </select>
-
-        <label for="max-chars">Max chars per tab</label>
+        <label><input id="include-page-text" type="checkbox" checked /> Include page text</label>
+        <label><input id="include-meta-description" type="checkbox" checked /> Include meta description</label>
+        <label><input id="include-headings" type="checkbox" checked /> Include headings</label>
+        <label class="max-chars-label" for="max-chars">Max characters per tab</label>
         <select id="max-chars">
-          <option value="750">750</option>
-          <option value="1500" selected>1500</option>
-          <option value="3000">3000</option>
-          <option value="6000">6000</option>
-          <option value="12000">12000</option>
-        </select>
-
-        <label for="max-total-chars">Max total chars</label>
-        <select id="max-total-chars">
+          <option value="2000">2000</option>
+          <option value="5000">5000</option>
+          <option value="12000" selected>12000</option>
           <option value="25000">25000</option>
-          <option value="60000" selected>60000</option>
-          <option value="100000">100000</option>
-          <option value="150000">150000</option>
+          <option value="50000">50000</option>
         </select>
-
-        <details>
-          <summary>Advanced line filtering</summary>
-          <label>Min line length <input id="min-line-length" type="number" value="25" min="0" /></label>
-          <label>Max line length <input id="max-line-length" type="number" value="500" min="50" /></label>
-          <label>Max key lines <input id="max-key-lines" type="number" value="12" min="1" max="100" /></label>
-          <label><input id="dedupe-lines" type="checkbox" checked /> Deduplicate consecutive lines</label>
-          <label><input id="apply-line-filter" type="checkbox" /> Apply min/max line filters</label>
-        </details>
       </section>
 
       <p id="status" class="status">Ready.</p>
