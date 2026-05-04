@@ -1,113 +1,81 @@
-# LLM Tab Context Exporter
+# URL Picker
 
-A local-only Chrome extension that exports open tabs into Markdown for LLM context.
+URL Picker is a Chrome extension for collecting tab titles and URLs from the current tab, the current browser window, or every open browser window. The generated text can be copied to the clipboard or downloaded as Markdown or plain text.
 
 ## Features
 
-- Export **Current Tab**, **Current Window**, or **All Windows** tabs.
-- Output clean, LLM-readable Markdown with tab index and per-tab sections.
-- Optional inclusion of visible page text, meta description, and headings.
-- Per-tab text truncation controls (2000, 5000, 12000, 25000, 50000 chars).
-- Copy Markdown to clipboard or download as `.md`.
-- Graceful handling of unsupported/internal browser URLs and extraction errors.
+- Export the current tab, current window, or all browser windows.
+- Group multi-tab exports by browser window.
+- Add saved context text to the top of each export.
+- Copy the generated output to the clipboard.
+- Download the generated output as Markdown or plain text.
+- Filter out Google Search tabs, non-http(s) pages, and duplicate URLs.
 
-## Supported browsers
+## Output Format
 
-- Google Chrome
-- Microsoft Edge
-- Brave
-- Other Chromium browsers may work, but are not optimized in v0.1.0.
+Current tab exports use a single line:
 
-## Privacy
+```text
+Tab name - URL
+```
 
-- Runs locally in your browser.
-- Does not send data to a server.
-- Does not use analytics.
-- Reads tab/page content only after the user clicks an export button.
+Current window and all windows exports include a summary followed by grouped tab lists:
 
-## Manual install
+```text
+These are job applications; search and summarize each one.
 
-1. Download or clone this repo (`Browser-Context-Pull`).
-2. Open Chrome.
-3. Go to `chrome://extensions`.
-4. Enable Developer mode.
-5. Click **Load unpacked**.
-6. Select the `extension/` folder.
-7. Pin the extension.
-8. Click the extension icon and export tabs.
+Total 2 Windows | 3 Tabs:
+Window [a] - 2 tabs
+Window [b] - 1 tab
+
+Window [a]:
+[a1] - Tab name - URL
+[a2] - Another tab name - URL
+
+Window [b]:
+[b1] - Tab name - URL
+```
+
+## Filters
+
+All filters are enabled by default and can be turned off in the popup.
+
+- **Remove Google Search tabs** removes tabs with Google Search result pages.
+- **Remove non-http(s) pages** removes browser pages such as `chrome://extensions/` and `chrome://newtab/`.
+- **Remove duplicate URLs** keeps the first matching URL and removes later duplicates.
+
+## Saved Context
+
+The context field is saved in the extension with `chrome.storage.local`. The text stays available after the popup or browser window is closed and is added to the top of each generated export.
+
+## Install
+
+1. Open Chrome and go to `chrome://extensions`.
+2. Enable **Developer mode**.
+3. Click **Load unpacked**.
+4. Select the `extension/` folder.
+5. Pin the extension from the Chrome toolbar.
 
 ## Usage
 
 1. Open the extension popup.
-2. Pick export mode: Current Tab, Current Window, or All Windows.
-3. Choose options:
-   - Include page text
-   - Include meta description
-   - Include headings
-   - Max characters per tab
-4. Click an export button.
-5. Copy Markdown or Download Markdown.
+2. Choose **Current Tab**, **Current Window**, or **All Windows**.
+3. Add or update the saved context text if needed.
+4. Adjust filters if needed.
+5. Click **Copy**, **Download MD**, or **Download TXT**.
 
 ## Development
 
-- Plain HTML/CSS/JS, Manifest V3.
-- No backend.
-- No external packages.
-
-- Icons are stored as text-based SVG placeholders to avoid binary-file PR issues in tooling.
-
-Quick checks:
+Run the JavaScript syntax check:
 
 ```bash
 npm run check
 ```
 
-## Build release ZIP
+Build the extension ZIP:
 
 ```bash
 npm run zip
 ```
 
-Produces:
-
-- `dist/llm-tab-context-exporter-v0.1.0.zip`
-
-## Known limitations
-
-- Cannot read `chrome://`, `edge://`, `brave://`, `about:`, extension pages, and some browser-internal pages.
-- Cannot reliably read some PDFs.
-- Cannot read video/audio content.
-- Cannot read text rendered only inside canvas.
-- May not read cross-origin iframe content.
-- Pages requiring login are only readable if already loaded and accessible in the active browser session.
-
-## Roadmap
-
-- Firefox support
-- Safari support later
-- Better readable-mode extraction
-- Token/character estimate
-- Save presets
-- Export selected tabs only
-- Optional summarization by user-provided local model endpoint, but not in v0.1.0
-
-## Testing checklist
-
-- [ ] Load unpacked extension in Chrome.
-- [ ] Export current tab on a normal website.
-- [ ] Export current window with multiple tabs.
-- [ ] Export all windows.
-- [ ] Test unsupported page like `chrome://extensions`.
-- [ ] Test Copy Markdown.
-- [ ] Test Download Markdown.
-- [ ] Test max character truncation.
-- [ ] Test with Include page text unchecked.
-- [ ] Test with Include headings unchecked.
-- [ ] Test with Include meta description unchecked.
-- [ ] Test in Microsoft Edge.
-- [ ] Test in Brave.
-
-
-### SPA pages that stay on "Loading"
-
-Some sites render content late via JavaScript or in protected/cross-origin frames. v0.1.0 now waits briefly before extraction and falls back to raw `textContent` to improve capture, but some embedded/remote content may still be inaccessible to extensions.
+The packaged extension is written to `dist/url-picker-v0.1.0.zip`.

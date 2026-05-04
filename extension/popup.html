@@ -3,44 +3,41 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>LLM Tab Context Exporter</title>
+    <title>URL Picker</title>
     <link rel="stylesheet" href="popup.css" />
   </head>
   <body>
     <main class="popup">
       <header class="header">
-        <h1>LLM Tab Context Exporter</h1>
-        <span class="version">v0.1.0</span>
+        <h1>URL Picker</h1>
       </header>
 
       <section class="controls">
         <div class="buttons-row">
-          <button id="export-current-tab">Export Current Tab</button>
-          <button id="export-current-window">Export Current Window</button>
-          <button id="export-all-windows">Export All Windows</button>
+          <button id="export-current-tab">Current Tab</button>
+          <button id="export-current-window">Current Window</button>
+          <button id="export-all-windows">All Windows</button>
         </div>
         <div class="buttons-row">
-          <button id="copy-markdown">Copy Markdown</button>
-          <button id="download-markdown">Download Markdown</button>
+          <button id="copy-output">Copy</button>
+          <button id="download-md-output">Download MD</button>
+          <button id="download-txt-output">Download TXT</button>
         </div>
       </section>
 
-      <section class="options">
-        <label><input id="include-page-text" type="checkbox" checked /> Include page text</label>
-        <label><input id="include-meta-description" type="checkbox" checked /> Include meta description</label>
-        <label><input id="include-headings" type="checkbox" checked /> Include headings</label>
-        <label class="max-chars-label" for="max-chars">Max characters per tab</label>
-        <select id="max-chars">
-          <option value="2000">2000</option>
-          <option value="5000">5000</option>
-          <option value="12000" selected>12000</option>
-          <option value="25000">25000</option>
-          <option value="50000">50000</option>
-        </select>
+      <section class="filters" aria-label="Filters">
+        <label><input id="filter-google-search" type="checkbox" checked /> Remove Google Search tabs</label>
+        <label><input id="filter-non-http" type="checkbox" checked /> Remove non-http(s) pages</label>
+        <label><input id="filter-duplicates" type="checkbox" checked /> Remove duplicate URLs</label>
+      </section>
+
+      <section class="context">
+        <label for="context-text">Context added to top</label>
+        <textarea id="context-text" placeholder="Add text to the top of the export, such as: these are job applications; search and summarize each one." spellcheck="true"></textarea>
       </section>
 
       <p id="status" class="status">Ready.</p>
-      <textarea id="markdown-output" placeholder="Generated Markdown will appear here..." spellcheck="false"></textarea>
+      <textarea id="tab-output" placeholder="Tab titles and URLs will appear here..." spellcheck="false"></textarea>
     </main>
 
     <script src="popup.js"></script>

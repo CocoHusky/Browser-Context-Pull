@@ -1,279 +1,272 @@
-const VERSION = '0.1.0';
-const DEFAULT_MAX_CHARS = 12000;
-const UNSUPPORTED_SCHEMES = ['chrome://', 'edge://', 'brave://', 'about:', 'file:', 'chrome-extension:', 'devtools:', 'view-source:'];
-
-const outputEl = document.getElementById('markdown-output');
+const outputEl = document.getElementById('tab-output');
 const statusEl = document.getElementById('status');
+const filterGoogleSearchEl = document.getElementById('filter-google-search');
+const filterNonHttpEl = document.getElementById('filter-non-http');
+const filterDuplicatesEl = document.getElementById('filter-duplicates');
+const contextTextEl = document.getElementById('context-text');
+const CONTEXT_STORAGE_KEY = 'exportContextText';
+
+let lastMode = null;
+let saveContextTimeout = null;
 
 document.getElementById('export-current-tab').addEventListener('click', () => exportTabs('currentTab'));
 document.getElementById('export-current-window').addEventListener('click', () => exportTabs('currentWindow'));
 document.getElementById('export-all-windows').addEventListener('click', () => exportTabs('allWindows'));
-document.getElementById('copy-markdown').addEventListener('click', copyMarkdown);
-document.getElementById('download-markdown').addEventListener('click', downloadMarkdown);
+document.getElementById('copy-output').addEventListener('click', copyOutput);
+document.getElementById('download-md-output').addEventListener('click', () => downloadOutput('md'));
+document.getElementById('download-txt-output').addEventListener('click', () => downloadOutput('txt'));
+[filterGoogleSearchEl, filterNonHttpEl, filterDuplicatesEl].forEach((filterEl) => {
+  filterEl.addEventListener('change', () => {
+    if (lastMode) {
+      exportTabs(lastMode);
+    }
+  });
+});
+contextTextEl.addEventListener('input', () => {
+  window.clearTimeout(saveContextTimeout);
+  saveContextTimeout = window.setTimeout(saveContextText, 250);
+
+  if (lastMode) {
+    exportTabs(lastMode);
+  }
+});
+contextTextEl.addEventListener('change', saveContextText);
+
+loadContextText();
 
 function setStatus(message) {
   statusEl.textContent = message;
 }
 
-function getExportOptions() {
+function cleanValue(value, fallback) {
+  const text = String(value || '').replace(/\s+/g, ' ').trim();
+  return text || fallback;
+}
+
+function getFilters() {
   return {
-    includePageText: document.getElementById('include-page-text').checked,
-    includeMetaDescription: document.getElementById('include-meta-description').checked,
-    includeHeadings: document.getElementById('include-headings').checked,
-    maxChars: Number(document.getElementById('max-chars').value) || DEFAULT_MAX_CHARS
+    removeGoogleSearch: filterGoogleSearchEl.checked,
+    removeNonHttp: filterNonHttpEl.checked,
+    removeDuplicates: filterDuplicatesEl.checked
   };
 }
 
-async function getTabsForMode(mode) {
-  if (mode === 'currentTab') {
-    return chrome.tabs.query({ active: true, currentWindow: true });
+async function loadContextText() {
+  try {
+    const result = await chrome.storage.local.get(CONTEXT_STORAGE_KEY);
+    contextTextEl.value = result[CONTEXT_STORAGE_KEY] || '';
+  } catch (error) {
+    setStatus(`Context load failed: ${error && error.message ? error.message : 'Unknown error'}`);
   }
-  if (mode === 'currentWindow') {
-    return chrome.tabs.query({ currentWindow: true });
-  }
-  return chrome.tabs.query({});
 }
 
-function isSupportedUrl(url) {
-  if (!url) {
+async function saveContextText() {
+  try {
+    await chrome.storage.local.set({ [CONTEXT_STORAGE_KEY]: contextTextEl.value });
+  } catch (error) {
+    setStatus(`Context save failed: ${error && error.message ? error.message : 'Unknown error'}`);
+  }
+}
+
+function addContextToLines(lines) {
+  const contextText = contextTextEl.value.trim();
+  return contextText && lines.length ? [contextText, '', ...lines] : lines;
+}
+
+function isGoogleSearchTab(tab) {
+  const title = cleanValue(tab.title, '');
+  const url = cleanValue(tab.url, '');
+
+  if (title.includes(' - Google Search')) {
+    return true;
+  }
+
+  try {
+    const parsedUrl = new URL(url);
+    const hostname = parsedUrl.hostname.toLowerCase();
+    return hostname === 'google.com' || hostname.endsWith('.google.com') ? parsedUrl.pathname === '/search' : false;
+  } catch (error) {
     return false;
   }
+}
+
+function isHttpUrl(url) {
   return url.startsWith('http://') || url.startsWith('https://');
 }
 
-async function extractPageData(tabId) {
-  const results = await chrome.scripting.executeScript({
-    target: { tabId },
-    func: async () => {
-      await new Promise((resolve) => setTimeout(resolve, 900));
-      const title = document.title || '';
-      const url = location.href || '';
-      const metaNode = document.querySelector('meta[name="description"]') || document.querySelector('meta[property="og:description"]');
-      const metaDescription = metaNode ? metaNode.getAttribute('content') || '' : '';
-      const headings = Array.from(document.querySelectorAll('h1, h2, h3'))
-        .map((node) => (node.textContent || '').trim())
-        .filter(Boolean)
-        .slice(0, 30);
+function applyFilters(tabs, filters, filterState = { seenUrls: new Set() }) {
+  const keptTabs = [];
+  let removedTabs = 0;
 
-      let pageText = '';
-      if (document.body) {
-        const clone = document.body.cloneNode(true);
-        clone.querySelectorAll('script, style, noscript, svg, canvas, iframe, nav, footer, aside').forEach((el) => el.remove());
-        const inner = clone.innerText || document.body.innerText || '';
-        const rawText = clone.textContent || document.body.textContent || '';
-        const mainText = Array.from(document.querySelectorAll('main, article, [role="main"], section, p, li'))
-          .map((node) => (node.textContent || '').trim())
-          .filter(Boolean)
-          .join('\n');
-        pageText = [inner, mainText, rawText].filter(Boolean).join('\n\n');
-      }
+  tabs.forEach((tab) => {
+    const url = cleanValue(tab.url, '');
 
-      return {
-        title,
-        url,
-        metaDescription,
-        headings,
-        pageText
-      };
+    if (filters.removeGoogleSearch && isGoogleSearchTab(tab)) {
+      removedTabs += 1;
+      return;
     }
+
+    if (filters.removeNonHttp && !isHttpUrl(url)) {
+      removedTabs += 1;
+      return;
+    }
+
+    if (filters.removeDuplicates) {
+      const duplicateKey = url.toLowerCase();
+      if (filterState.seenUrls.has(duplicateKey)) {
+        removedTabs += 1;
+        return;
+      }
+      filterState.seenUrls.add(duplicateKey);
+    }
+
+    keptTabs.push(tab);
   });
 
-  if (!results || !results[0] || !results[0].result) {
-    return { title: '', url: '', metaDescription: '', headings: [], pageText: '' };
+  return { tabs: keptTabs, removedTabs };
+}
+
+function formatCurrentTab(tab) {
+  return `${cleanValue(tab.title, 'Untitled tab')} - ${cleanValue(tab.url, 'No URL')}`;
+}
+
+function getWindowLabel(index) {
+  const alphabet = 'abcdefghijklmnopqrstuvwxyz';
+  let label = '';
+  let currentIndex = index;
+
+  do {
+    label = alphabet[currentIndex % alphabet.length] + label;
+    currentIndex = Math.floor(currentIndex / alphabet.length) - 1;
+  } while (currentIndex >= 0);
+
+  return label;
+}
+
+function formatWindowSection(windowLabel, tabs) {
+  const lines = [`Window [${windowLabel}]:`];
+
+  tabs.forEach((tab, tabIndex) => {
+    lines.push(`[${windowLabel}${tabIndex + 1}] - ${cleanValue(tab.title, 'Untitled tab')} - ${cleanValue(tab.url, 'No URL')}`);
+  });
+
+  return lines;
+}
+
+async function getOutputForMode(mode) {
+  const filters = getFilters();
+  let tabs = [];
+
+  if (mode === 'currentTab') {
+    tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    const filtered = applyFilters(tabs, filters);
+    return {
+      lines: filtered.tabs.map(formatCurrentTab),
+      shownTabs: filtered.tabs.length,
+      removedTabs: filtered.removedTabs
+    };
   }
 
-  return results[0].result;
-}
+  if (mode === 'currentWindow') {
+    tabs = await chrome.tabs.query({ currentWindow: true });
+    const filtered = applyFilters(tabs.sort((a, b) => a.index - b.index), filters);
+    const lines = filtered.tabs.length
+      ? buildWindowSummary([{ label: 'a', tabCount: filtered.tabs.length }]).concat('', formatWindowSection('a', filtered.tabs))
+      : [];
+    return {
+      lines,
+      shownTabs: filtered.tabs.length,
+      removedTabs: filtered.removedTabs
+    };
+  }
 
-function cleanText(text) {
-  const safe = (text || '').replace(/\r/g, '');
-  return safe
-    .replace(/[ \t]+/g, ' ')
-    .replace(/\n[ \t]+/g, '\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
-}
+  const windows = await chrome.windows.getAll({ populate: true, windowTypes: ['normal'] });
+  let removedTabs = 0;
+  const filterState = { seenUrls: new Set() };
+  const sections = [];
+  const windowSummaries = [];
 
-function buildMarkdown(results, metadata) {
-  const lines = [];
-  lines.push('# Browser Context Pack');
-  lines.push('');
-  lines.push(`Generated: ${metadata.generatedAt}`);
-  lines.push(`Extension: LLM Tab Context Exporter v${VERSION}`);
-  lines.push(`Mode: ${metadata.modeLabel}`);
-  lines.push(`Total tabs: ${metadata.totalTabs}`);
-  lines.push(`Readable tabs: ${metadata.readableTabs}`);
-  lines.push(`Skipped tabs: ${metadata.skippedTabs}`);
-  lines.push('');
-  lines.push('## Tab Index');
-  lines.push('');
+  windows.forEach((browserWindow, windowIndex) => {
+    const windowLabel = getWindowLabel(windowIndex);
+    const windowTabs = (browserWindow.tabs || []).sort((a, b) => a.index - b.index);
+    const filtered = applyFilters(windowTabs, filters, filterState);
+    removedTabs += filtered.removedTabs;
 
-  results.forEach((result, index) => {
-    if (result.skipped === 'unsupported') {
-      lines.push(`${index + 1}. ${result.url} — unsupported URL`);
-    } else {
-      lines.push(`${index + 1}. [${result.title || '(Untitled Tab)'}](${result.url || ''})`);
+    if (filtered.tabs.length) {
+      windowSummaries.push({ label: windowLabel, tabCount: filtered.tabs.length });
+      sections.push(formatWindowSection(windowLabel, filtered.tabs));
     }
   });
 
-  lines.push('');
-  lines.push('---');
-  lines.push('');
+  const lines = sections.length
+    ? buildWindowSummary(windowSummaries).concat('', sections.flatMap((section) => section.concat('')))
+    : [];
+  const shownTabs = windowSummaries.reduce((sum, summary) => sum + summary.tabCount, 0);
 
-  results.forEach((result, index) => {
-    lines.push(`# Tab ${index + 1}: ${result.title || '(Untitled Tab)'}`);
-    lines.push('');
-    lines.push(`URL: ${result.url || '(No URL)'}`);
-    lines.push('');
+  if (lines[lines.length - 1] === '') {
+    lines.pop();
+  }
 
-    if (result.skipped === 'unsupported') {
-      lines.push('Skipped: unsupported browser/internal URL.');
-      lines.push('');
-      lines.push('---');
-      lines.push('');
-      return;
-    }
+  return { lines, shownTabs, removedTabs };
+}
 
-    if (result.skipped === 'error') {
-      lines.push('Skipped: could not read page content.');
-      lines.push(`Reason: ${result.reason}`);
-      lines.push('');
-      lines.push('---');
-      lines.push('');
-      return;
-    }
+function buildWindowSummary(windowSummaries) {
+  const totalWindows = windowSummaries.length;
+  const totalTabs = windowSummaries.reduce((sum, summary) => sum + summary.tabCount, 0);
+  const windowText = totalWindows === 1 ? 'Window' : 'Windows';
+  const tabText = totalTabs === 1 ? 'Tab' : 'Tabs';
+  const lines = [`Total ${totalWindows} ${windowText} | ${totalTabs} ${tabText}:`];
 
-    if (metadata.options.includeMetaDescription) {
-      lines.push('## Meta Description');
-      lines.push('');
-      lines.push(result.metaDescription || '(No meta description found.)');
-      lines.push('');
-    }
-
-    if (metadata.options.includeHeadings) {
-      lines.push('## Headings');
-      lines.push('');
-      if (result.headings.length) {
-        result.headings.forEach((heading) => lines.push(`- ${heading}`));
-      } else {
-        lines.push('- (No headings found.)');
-      }
-      lines.push('');
-    }
-
-    if (metadata.options.includePageText) {
-      lines.push('## Visible Page Text');
-      lines.push('');
-      if (result.wasTruncated) {
-        lines.push(`[Truncated: original page text was ${result.originalLength} characters; showing first ${result.shownLength} characters.]`);
-        lines.push('');
-      }
-      lines.push(result.pageText || '(No visible page text found.)');
-      lines.push('');
-    }
-
-    lines.push('---');
-    lines.push('');
+  windowSummaries.forEach((summary) => {
+    const tabText = summary.tabCount === 1 ? 'tab' : 'tabs';
+    lines.push(`Window [${summary.label}] - ${summary.tabCount} ${tabText}`);
   });
 
-  return lines.join('\n');
+  return lines;
 }
 
 async function exportTabs(mode) {
-  const options = getExportOptions();
-  const modeLabelMap = {
-    currentTab: 'Current Tab',
-    currentWindow: 'Current Window',
-    allWindows: 'All Windows'
-  };
-
   try {
-    const tabs = await getTabsForMode(mode);
-    setStatus(`Found ${tabs.length} tabs.`);
-
-    const results = [];
-    let readableTabs = 0;
-    let skippedTabs = 0;
-
-    for (let i = 0; i < tabs.length; i += 1) {
-      const tab = tabs[i];
-      const title = tab.title || '(Untitled Tab)';
-      const url = tab.url || '';
-      setStatus(`Exporting ${i + 1} / ${tabs.length}...`);
-
-      if (!isSupportedUrl(url)) {
-        skippedTabs += 1;
-        results.push({ title, url, skipped: 'unsupported' });
-        continue;
-      }
-
-      try {
-        const extracted = await extractPageData(tab.id);
-        const cleanedText = cleanText(extracted.pageText);
-        const originalLength = cleanedText.length;
-        const truncatedText = cleanedText.slice(0, options.maxChars);
-        const wasTruncated = originalLength > options.maxChars;
-
-        readableTabs += 1;
-        results.push({
-          title: extracted.title || title,
-          url: extracted.url || url,
-          metaDescription: cleanText(extracted.metaDescription),
-          headings: (extracted.headings || []).map((heading) => cleanText(heading)).filter(Boolean),
-          pageText: options.includePageText ? truncatedText : '',
-          originalLength,
-          shownLength: options.includePageText ? truncatedText.length : 0,
-          wasTruncated: options.includePageText && wasTruncated
-        });
-      } catch (error) {
-        skippedTabs += 1;
-        results.push({ title, url, skipped: 'error', reason: error && error.message ? error.message : 'Unknown error' });
-      }
-    }
-
-    const markdown = buildMarkdown(results, {
-      generatedAt: new Date().toISOString(),
-      modeLabel: modeLabelMap[mode],
-      totalTabs: tabs.length,
-      readableTabs,
-      skippedTabs,
-      options
-    });
-
-    outputEl.value = markdown;
-    setStatus(`Done. Readable: ${readableTabs}. Skipped: ${skippedTabs}.`);
+    lastMode = mode;
+    setStatus('Getting tabs...');
+    const { lines, shownTabs, removedTabs } = await getOutputForMode(mode);
+    outputEl.value = addContextToLines(lines).join('\n');
+    const removedText = removedTabs ? ` ${removedTabs} filtered out.` : '';
+    setStatus(shownTabs ? `Ready. ${shownTabs} tab${shownTabs === 1 ? '' : 's'} shown.${removedText}` : `No tabs shown.${removedText}`);
   } catch (error) {
     setStatus(`Export failed: ${error && error.message ? error.message : 'Unknown error'}`);
   }
 }
 
-async function copyMarkdown() {
-  const markdown = outputEl.value.trim();
-  if (!markdown) {
+async function copyOutput() {
+  const output = outputEl.value.trim();
+  if (!output) {
     setStatus('Nothing to copy yet.');
     return;
   }
 
   try {
-    await navigator.clipboard.writeText(markdown);
-    setStatus('Copied Markdown to clipboard.');
+    await navigator.clipboard.writeText(output);
+    setStatus('Copied to clipboard.');
   } catch (error) {
     setStatus(`Copy failed: ${error && error.message ? error.message : 'Unknown error'}`);
   }
 }
 
-function downloadMarkdown() {
-  const markdown = outputEl.value.trim();
-  if (!markdown) {
+function downloadOutput(fileType) {
+  const output = outputEl.value.trim();
+  if (!output) {
     setStatus('Nothing to download yet.');
     return;
   }
 
   const now = new Date();
   const pad = (num) => String(num).padStart(2, '0');
-  const filename = `browser-context-pack-${now.getUTCFullYear()}-${pad(now.getUTCMonth() + 1)}-${pad(now.getUTCDate())}-${pad(now.getUTCHours())}${pad(now.getUTCMinutes())}.md`;
+  const extension = fileType === 'md' ? 'md' : 'txt';
+  const filename = `tabs-${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}.${extension}`;
+  const mimeType = fileType === 'md' ? 'text/markdown' : 'text/plain';
 
-  const blob = new Blob([markdown], { type: 'text/markdown' });
+  const blob = new Blob([output], { type: mimeType });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
   anchor.href = url;
@@ -281,5 +274,5 @@ function downloadMarkdown() {
   anchor.click();
   URL.revokeObjectURL(url);
 
-  setStatus(`Downloaded ${filename}`);
+  setStatus(`Downloaded ${filename}.`);
 }
