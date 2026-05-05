@@ -8,33 +8,61 @@ URL Picker is a Chrome extension for collecting tab titles and URLs from the cur
 - Group multi-tab exports by browser window.
 - Add saved context text to the top of each export.
 - Copy the generated output to the clipboard.
-- Download the generated output as Markdown or plain text.
+- Download the generated output as Markdown or JSON.
 - Filter out Google Search tabs, non-http(s) pages, and duplicate URLs.
 
 ## Output Format
 
 Current tab exports use a single line:
 
-```text
-Tab name - URL
+```markdown
+- [Tab name](URL)
 ```
 
-Current window and all windows exports include a summary followed by grouped tab lists:
+Current window and all windows exports include grouped tab lists:
 
-```text
-These are job applications; search and summarize each one.
+```markdown
+## Window 1
 
-Total 2 Windows | 3 Tabs:
-Window [a] - 2 tabs
-Window [b] - 1 tab
+- [Tab name](URL)
+- [Another tab name](URL)
 
-Window [a]:
-[a1] - Tab name - URL
-[a2] - Another tab name - URL
+## Window 2
 
-Window [b]:
-[b1] - Tab name - URL
+- [Tab name](URL)
 ```
+
+## JSON Output
+
+The JSON output provides structured data:
+
+```json
+{
+  "browser": "Chrome",
+  "window_count": 2,
+  "tab_count": 6,
+  "windows": [
+    {
+      "window_id": 1,
+      "tab_count": 2,
+      "tabs": [
+        {
+          "position": 1,
+          "title": "Chrome Web Store Extensions",
+          "url": "https://chromewebstore.google.com/category/extensions"
+        },
+        {
+          "position": 2,
+          "title": "Another Tab",
+          "url": "https://example.com"
+        }
+      ]
+    }
+  ]
+}
+```
+
+If context is added, it includes a "context" field.
 
 ## Filters
 
@@ -66,7 +94,7 @@ URL Picker runs locally in the browser. It does not send tab data, saved context
 2. Choose **Current Tab**, **Current Window**, or **All Windows**.
 3. Add or update the saved context text if needed.
 4. Adjust filters if needed.
-5. Click **Copy**, **Download MD**, or **Download TXT**.
+5. Click **Copy**, **Download MD**, or **Download JSON**.
 
 ## Development
 

@@ -12,7 +12,7 @@ Copy or download tab titles and URLs from the current tab, current window, or al
 
 URL Picker helps collect browser tab titles and URLs into a clean text export.
 
-Choose the current tab, current window, or all open browser windows. Multi-window exports are grouped by browser window and include a short summary at the top. Add optional saved context text to the top of each export, then copy the result or download it as Markdown or plain text.
+Choose the current tab, current window, or all open browser windows. Multi-window exports are grouped by browser window. Add optional saved context text to the top of each export, then copy the result or download it as Markdown or JSON.
 
 Filters are enabled by default for Google Search tabs, non-http(s) pages, and duplicate URLs.
 

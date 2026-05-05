@@ -8,13 +8,14 @@ const CONTEXT_STORAGE_KEY = 'exportContextText';
 
 let lastMode = null;
 let saveContextTimeout = null;
+let jsonOutput = null;
 
 document.getElementById('export-current-tab').addEventListener('click', () => exportTabs('currentTab'));
 document.getElementById('export-current-window').addEventListener('click', () => exportTabs('currentWindow'));
 document.getElementById('export-all-windows').addEventListener('click', () => exportTabs('allWindows'));
 document.getElementById('copy-output').addEventListener('click', copyOutput);
 document.getElementById('download-md-output').addEventListener('click', () => downloadOutput('md'));
-document.getElementById('download-txt-output').addEventListener('click', () => downloadOutput('txt'));
+document.getElementById('download-json-output').addEventListener('click', () => downloadOutput('json'));
 [filterGoogleSearchEl, filterNonHttpEl, filterDuplicatesEl].forEach((filterEl) => {
   filterEl.addEventListener('change', () => {
     if (lastMode) {
@@ -127,27 +128,18 @@ function applyFilters(tabs, filters, filterState = { seenUrls: new Set() }) {
 }
 
 function formatCurrentTab(tab) {
-  return `${cleanValue(tab.title, 'Untitled tab')} - ${cleanValue(tab.url, 'No URL')}`;
+  return `- [${cleanValue(tab.title, 'Untitled tab')}](${cleanValue(tab.url, 'No URL')})`;
 }
 
 function getWindowLabel(index) {
-  const alphabet = 'abcdefghijklmnopqrstuvwxyz';
-  let label = '';
-  let currentIndex = index;
-
-  do {
-    label = alphabet[currentIndex % alphabet.length] + label;
-    currentIndex = Math.floor(currentIndex / alphabet.length) - 1;
-  } while (currentIndex >= 0);
-
-  return label;
+  return (index + 1).toString();
 }
 
-function formatWindowSection(windowLabel, tabs) {
-  const lines = [`Window [${windowLabel}]:`];
+function formatWindowSection(windowNumber, tabs) {
+  const lines = [`## Window ${windowNumber}`];
 
-  tabs.forEach((tab, tabIndex) => {
-    lines.push(`[${windowLabel}${tabIndex + 1}] - ${cleanValue(tab.title, 'Untitled tab')} - ${cleanValue(tab.url, 'No URL')}`);
+  tabs.forEach((tab) => {
+    lines.push(`- [${cleanValue(tab.title, 'Untitled tab')}](${cleanValue(tab.url, 'No URL')})`);
   });
 
   return lines;
@@ -160,77 +152,98 @@ async function getOutputForMode(mode) {
   if (mode === 'currentTab') {
     tabs = await chrome.tabs.query({ active: true, currentWindow: true });
     const filtered = applyFilters(tabs, filters);
-    return {
-      lines: filtered.tabs.map(formatCurrentTab),
-      shownTabs: filtered.tabs.length,
-      removedTabs: filtered.removedTabs
+    const markdownLines = filtered.tabs.map(formatCurrentTab);
+    const jsonObject = {
+      "browser": "Chrome",
+      "window_count": 1,
+      "tab_count": filtered.tabs.length,
+      "windows": [
+        {
+          "window_id": 1,
+          "tab_count": filtered.tabs.length,
+          "tabs": filtered.tabs.map((tab, index) => ({
+            "position": index + 1,
+            "title": cleanValue(tab.title, 'Untitled tab'),
+            "url": cleanValue(tab.url, 'No URL')
+          }))
+        }
+      ]
     };
+    return { markdownLines, jsonObject, shownTabs: filtered.tabs.length, removedTabs: filtered.removedTabs };
   }
 
   if (mode === 'currentWindow') {
     tabs = await chrome.tabs.query({ currentWindow: true });
     const filtered = applyFilters(tabs.sort((a, b) => a.index - b.index), filters);
-    const lines = filtered.tabs.length
-      ? buildWindowSummary([{ label: 'a', tabCount: filtered.tabs.length }]).concat('', formatWindowSection('a', filtered.tabs))
-      : [];
-    return {
-      lines,
-      shownTabs: filtered.tabs.length,
-      removedTabs: filtered.removedTabs
+    const markdownLines = [`## Window 1`].concat(filtered.tabs.map(formatCurrentTab));
+    const jsonObject = {
+      "browser": "Chrome",
+      "window_count": 1,
+      "tab_count": filtered.tabs.length,
+      "windows": [
+        {
+          "window_id": 1,
+          "tab_count": filtered.tabs.length,
+          "tabs": filtered.tabs.map((tab, index) => ({
+            "position": index + 1,
+            "title": cleanValue(tab.title, 'Untitled tab'),
+            "url": cleanValue(tab.url, 'No URL')
+          }))
+        }
+      ]
     };
+    return { markdownLines, jsonObject, shownTabs: filtered.tabs.length, removedTabs: filtered.removedTabs };
   }
 
   const windows = await chrome.windows.getAll({ populate: true, windowTypes: ['normal'] });
   let removedTabs = 0;
   const filterState = { seenUrls: new Set() };
-  const sections = [];
-  const windowSummaries = [];
+  const markdownSections = [];
+  const jsonWindows = [];
+  let totalTabs = 0;
 
   windows.forEach((browserWindow, windowIndex) => {
-    const windowLabel = getWindowLabel(windowIndex);
+    const windowNumber = windowIndex + 1;
     const windowTabs = (browserWindow.tabs || []).sort((a, b) => a.index - b.index);
     const filtered = applyFilters(windowTabs, filters, filterState);
     removedTabs += filtered.removedTabs;
 
     if (filtered.tabs.length) {
-      windowSummaries.push({ label: windowLabel, tabCount: filtered.tabs.length });
-      sections.push(formatWindowSection(windowLabel, filtered.tabs));
+      markdownSections.push(formatWindowSection(windowNumber, filtered.tabs));
+      jsonWindows.push({
+        "window_id": windowNumber,
+        "tab_count": filtered.tabs.length,
+        "tabs": filtered.tabs.map((tab, index) => ({
+          "position": index + 1,
+          "title": cleanValue(tab.title, 'Untitled tab'),
+          "url": cleanValue(tab.url, 'No URL')
+        }))
+      });
+      totalTabs += filtered.tabs.length;
     }
   });
 
-  const lines = sections.length
-    ? buildWindowSummary(windowSummaries).concat('', sections.flatMap((section) => section.concat('')))
-    : [];
-  const shownTabs = windowSummaries.reduce((sum, summary) => sum + summary.tabCount, 0);
-
-  if (lines[lines.length - 1] === '') {
-    lines.pop();
-  }
-
-  return { lines, shownTabs, removedTabs };
+  const markdownLines = markdownSections.flatMap(section => section.concat([''])).slice(0, -1);
+  const jsonObject = {
+    "browser": "Chrome",
+    "window_count": jsonWindows.length,
+    "tab_count": totalTabs,
+    "windows": jsonWindows
+  };
+  return { markdownLines, jsonObject, shownTabs: totalTabs, removedTabs };
 }
 
-function buildWindowSummary(windowSummaries) {
-  const totalWindows = windowSummaries.length;
-  const totalTabs = windowSummaries.reduce((sum, summary) => sum + summary.tabCount, 0);
-  const windowText = totalWindows === 1 ? 'Window' : 'Windows';
-  const tabText = totalTabs === 1 ? 'Tab' : 'Tabs';
-  const lines = [`Total ${totalWindows} ${windowText} | ${totalTabs} ${tabText}:`];
 
-  windowSummaries.forEach((summary) => {
-    const tabText = summary.tabCount === 1 ? 'tab' : 'tabs';
-    lines.push(`Window [${summary.label}] - ${summary.tabCount} ${tabText}`);
-  });
-
-  return lines;
-}
 
 async function exportTabs(mode) {
   try {
     lastMode = mode;
     setStatus('Getting tabs...');
-    const { lines, shownTabs, removedTabs } = await getOutputForMode(mode);
-    outputEl.value = addContextToLines(lines).join('\n');
+    const { markdownLines, jsonObject, shownTabs, removedTabs } = await getOutputForMode(mode);
+    const contextText = contextTextEl.value.trim();
+    const finalMarkdownLines = contextText ? [contextText, '', ...markdownLines] : markdownLines;
+    outputEl.value = finalMarkdownLines.join('\n');
+    jsonOutput = contextText ? { ...jsonObject, "context": contextText } : jsonObject;
     const removedText = removedTabs ? ` ${removedTabs} filtered out.` : '';
     setStatus(shownTabs ? `Ready. ${shownTabs} tab${shownTabs === 1 ? '' : 's'} shown.${removedText}` : `No tabs shown.${removedText}`);
   } catch (error) {
@@ -254,7 +267,12 @@ async function copyOutput() {
 }
 
 function downloadOutput(fileType) {
-  const output = outputEl.value.trim();
+  let output;
+  if (fileType === 'md') {
+    output = outputEl.value.trim();
+  } else if (fileType === 'json') {
+    output = JSON.stringify(jsonOutput, null, 2);
+  }
   if (!output) {
     setStatus('Nothing to download yet.');
     return;
@@ -262,9 +280,9 @@ function downloadOutput(fileType) {
 
   const now = new Date();
   const pad = (num) => String(num).padStart(2, '0');
-  const extension = fileType === 'md' ? 'md' : 'txt';
+  const extension = fileType === 'md' ? 'md' : 'json';
   const filename = `tabs-${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}.${extension}`;
-  const mimeType = fileType === 'md' ? 'text/markdown' : 'text/plain';
+  const mimeType = fileType === 'md' ? 'text/markdown' : 'application/json';
 
   const blob = new Blob([output], { type: mimeType });
   const url = URL.createObjectURL(blob);
