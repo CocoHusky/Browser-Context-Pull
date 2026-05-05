@@ -110,7 +110,7 @@ Build the extension ZIP:
 npm run zip
 ```
 
-The packaged extension is written to `dist/url-pull-chrome-v1.2.0.zip`. The `dist/` folder is generated locally and is not kept in the repository.
+The packaged extension is written to `dist/url-pull-chrome-v1.2.1.zip`. The `dist/` folder is generated locally and is not kept in the repository.
 
 Uses `extension/icons/icon.png` as the source icon and uses generated `16`, `48`, and `128` PNGs in the Chrome manifest.
 
@@ -122,5 +122,5 @@ Before uploading:
 
 1. Run `npm run check`.
 2. Run `npm run zip`.
-3. Upload `dist/url-pull-chrome-v1.2.0.zip` in the Chrome Developer Dashboard.
-4. Confirm the uploaded package shows version `1.2.0`.
+3. Upload `dist/url-pull-chrome-v1.2.1.zip` in the Chrome Developer Dashboard.
+4. Confirm the uploaded package shows version `1.2.1`.
